@@ -68,15 +68,27 @@ def mqtt_debug():
     return jsonify(mqtt_status)
 
 def start_mqtt():
-    client = mqtt.Client()
-    client.on_connect = on_connect
-    client.on_message = on_message
-    client.connect(BROKER, PORT, 60)
+    global mqtt_status
 
-    # Mantiene MQTT vivo en este hilo.
-    # Paho recomienda loop_start() o loop_forever()
-    # para mantener activa la red MQTT.
-    client.loop_forever()
+    mqtt_status["error"] = "start_mqtt iniciado"
+
+    try:
+        client = mqtt.Client()
+        client.on_connect = on_connect
+        client.on_message = on_message
+
+        mqtt_status["error"] = "intentando conectar al broker"
+
+        client.connect(BROKER, PORT, 60)
+
+        mqtt_status["error"] = "connect() ejecutado, entrando a loop_forever"
+
+        client.loop_forever()
+
+    except Exception as e:
+        mqtt_status["connected"] = False
+        mqtt_status["error"] = str(e)
+        print("ERROR MQTT:", e)
 
 mqtt_thread = threading.Thread(target=start_mqtt, daemon=True)
 mqtt_thread.start()
