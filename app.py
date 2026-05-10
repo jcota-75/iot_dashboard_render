@@ -14,6 +14,7 @@ TOPIC = "jcr/esp32_1/datos"
 
 MAX_SAMPLES = 50
 
+# ---------------- DATA BUFFERS ----------------
 history = {
     "time": [],
     "adc1": [],
@@ -21,9 +22,15 @@ history = {
     "pin23": []
 }
 
+mqtt_status = {
+    "connected": False,
+    "rc": None,
+    "last_message": None,
+    "error": "app.py cargado"
+}
+
 # ---------------- MQTT CALLBACKS ----------------
 def on_connect(client, userdata, flags, rc):
-
     global mqtt_status
 
     mqtt_status["connected"] = (rc == 0)
@@ -32,20 +39,22 @@ def on_connect(client, userdata, flags, rc):
 
     print("MQTT conectado. Código:", rc)
 
-    client.subscribe(TOPIC)
+    if rc == 0:
+        client.subscribe(TOPIC)
+        print("Suscrito a:", TOPIC)
+    else:
+        mqtt_status["error"] = "MQTT no conectado. Código rc: " + str(rc)
 
-    print("Suscrito a:", TOPIC)
 
 def on_message(client, userdata, msg):
-
     global history
     global mqtt_status
 
     try:
-
         payload = msg.payload.decode()
-
         mqtt_status["last_message"] = payload
+
+        print("MQTT recibido:", payload)
 
         data = json.loads(payload)
 
@@ -58,14 +67,14 @@ def on_message(client, userdata, msg):
         history["threshold"].append(threshold)
         history["pin23"].append(pin23)
 
+        for key in history:
+            if len(history[key]) > MAX_SAMPLES:
+                history[key].pop(0)
+
     except Exception as e:
-
         mqtt_status["error"] = str(e)
-
         print("Error MQTT:", e)
-@app.route("/mqtt_status")
-def mqtt_debug():
-    return jsonify(mqtt_status)
+
 
 def start_mqtt():
     global mqtt_status
@@ -90,6 +99,8 @@ def start_mqtt():
         mqtt_status["error"] = str(e)
         print("ERROR MQTT:", e)
 
+
+# ---------------- START MQTT THREAD ----------------
 mqtt_thread = threading.Thread(target=start_mqtt, daemon=True)
 mqtt_thread.start()
 
@@ -98,16 +109,17 @@ mqtt_thread.start()
 def index():
     return render_template("index.html")
 
+
 @app.route("/history")
 def get_history():
     return jsonify(history)
 
-mqtt_status = {
-    "connected": False,
-    "rc": None,
-    "last_message": None,
-    "error": None
-}
+
+@app.route("/mqtt_status")
+def mqtt_debug():
+    return jsonify(mqtt_status)
+
+
 @app.route("/debug")
 def debug():
     return jsonify({
@@ -117,20 +129,17 @@ def debug():
     })
 
 
-mqtt_status = {
-    "connected": False,
-    "rc": None,
-    "last_message": None,
-    "error": None
-}
 @app.route("/status")
 def status():
     return jsonify({
         "ok": True,
         "topic": TOPIC,
-        "samples": len(history["adc1"])
+        "samples": len(history["adc1"]),
+        "mqtt": mqtt_status
     })
 
+
+# ---------------- MAIN ----------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
     app.run(host="0.0.0.0", port=port, debug=False)
