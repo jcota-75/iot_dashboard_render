@@ -23,18 +23,31 @@ history = {
 
 # ---------------- MQTT CALLBACKS ----------------
 def on_connect(client, userdata, flags, rc):
+
+    global mqtt_status
+
+    mqtt_status["connected"] = (rc == 0)
+    mqtt_status["rc"] = rc
+    mqtt_status["error"] = None
+
     print("MQTT conectado. Código:", rc)
+
     client.subscribe(TOPIC)
+
     print("Suscrito a:", TOPIC)
 
 def on_message(client, userdata, msg):
+
     global history
+    global mqtt_status
 
     try:
-        payload = msg.payload.decode()
-        data = json.loads(payload)
 
-        print("MQTT recibido:", data)
+        payload = msg.payload.decode()
+
+        mqtt_status["last_message"] = payload
+
+        data = json.loads(payload)
 
         adc1 = float(data.get("adc1", 0))
         threshold = float(data.get("threshold", 2.5))
@@ -45,12 +58,14 @@ def on_message(client, userdata, msg):
         history["threshold"].append(threshold)
         history["pin23"].append(pin23)
 
-        for key in history:
-            if len(history[key]) > MAX_SAMPLES:
-                history[key].pop(0)
-
     except Exception as e:
-        print("Error procesando MQTT:", e)
+
+        mqtt_status["error"] = str(e)
+
+        print("Error MQTT:", e)
+@app.route("/mqtt_status")
+def mqtt_debug():
+    return jsonify(mqtt_status)
 
 def start_mqtt():
     client = mqtt.Client()
@@ -75,6 +90,12 @@ def index():
 def get_history():
     return jsonify(history)
 
+mqtt_status = {
+    "connected": False,
+    "rc": None,
+    "last_message": None,
+    "error": None
+}
 @app.route("/debug")
 def debug():
     return jsonify({
@@ -83,6 +104,13 @@ def debug():
         "history": history
     })
 
+
+mqtt_status = {
+    "connected": False,
+    "rc": None,
+    "last_message": None,
+    "error": None
+}
 @app.route("/status")
 def status():
     return jsonify({
