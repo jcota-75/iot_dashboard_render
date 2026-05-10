@@ -75,6 +75,14 @@ def index():
 def get_history():
     return jsonify(history)
 
+@app.route("/debug")
+def debug():
+    return jsonify({
+        "samples": len(history["adc1"]),
+        "last_adc": history["adc1"][-1] if history["adc1"] else None,
+        "history": history
+    })
+
 @app.route("/status")
 def status():
     return jsonify({
