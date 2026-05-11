@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard IoT MQTT + Flask</title>
+    <title>Dashboard IoT ESP32 + Flask</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -33,7 +33,7 @@
 
         .metrics {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 16px;
         }
 
@@ -84,6 +84,11 @@
             padding: 10px;
         }
 
+        input[type="range"] {
+            width: 100%;
+            accent-color: #38bdf8;
+        }
+
         @media(max-width: 700px) {
             .metrics {
                 grid-template-columns: 1fr;
@@ -96,8 +101,8 @@
 <div class="container">
 
     <div class="card">
-        <h1>Dashboard IoT MQTT + Flask WAN</h1>
-        <p>Datos recibidos por MQTT desde ESP32 y visualizados vía fetch + Chart.js.</p>
+        <h1>Dashboard IoT ESP32 + Flask WAN</h1>
+        <p>ESP32 publica datos por HTTP POST y el navegador visualiza mediante fetch + Chart.js.</p>
     </div>
 
     <div class="metrics">
@@ -115,10 +120,23 @@
             <div class="label">Pin23</div>
             <div class="value"><span id="pin23_value">0</span><span id="led"></span></div>
         </div>
+
+        <div class="metric">
+            <div class="label">PWM</div>
+            <div class="value"><span id="pwm_value">50</span> %</div>
+        </div>
     </div>
 
     <div class="card">
         <div id="alarma">NORMAL</div>
+    </div>
+
+    <div class="card">
+        <h2>Control PWM remoto</h2>
+        <p>Ciclo de trabajo seleccionado: <span id="pwm_slider_value">50</span> %</p>
+        <input type="range" id="pwm_slider" min="0" max="100" step="1" value="50"
+               oninput="mostrarPWM(this.value)"
+               onchange="enviarPWM(this.value)">
     </div>
 
     <div class="card">
@@ -180,6 +198,27 @@ const chart = new Chart(ctx, {
     }
 });
 
+function mostrarPWM(valor) {
+    document.getElementById("pwm_slider_value").innerText = valor;
+}
+
+function enviarPWM(valor) {
+    fetch("/control_pwm", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            pwm: parseInt(valor)
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log("PWM actualizado:", data);
+    })
+    .catch(err => console.error("Error PWM:", err));
+}
+
 function actualizarDashboard() {
     fetch("/history")
         .then(res => res.json())
@@ -195,10 +234,12 @@ function actualizarDashboard() {
             const adc = data.adc1[n - 1];
             const threshold = data.threshold[n - 1];
             const pin23 = data.pin23[n - 1];
+            const pwm = data.pwm[n - 1];
 
             document.getElementById("adc_value").innerText = Number(adc).toFixed(3);
             document.getElementById("threshold_value").innerText = Number(threshold).toFixed(2);
             document.getElementById("pin23_value").innerText = pin23;
+            document.getElementById("pwm_value").innerText = pwm;
 
             const led = document.getElementById("led");
             if (pin23 == 1) {
